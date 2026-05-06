@@ -1797,10 +1797,7 @@ function handleDriveBtn() {
     return;
   }
   if (driveAccessToken) {
-    const choice = confirm('Drive เชื่อมต่ออยู่แล้ว
-
-กด OK → Sync ข้อมูลจาก Drive
-กด Cancel → ตัดการเชื่อมต่อ');
+    const choice = confirm('Drive เชื่อมต่ออยู่แล้ว\n\nกด OK → Sync ข้อมูลจาก Drive\nกด Cancel → ตัดการเชื่อมต่อ');
     if (choice) driveSync();
     else disconnectDrive();
   } else {
@@ -2007,11 +2004,17 @@ function initApp() {
   if (!state.customProducts) state.customProducts = [];
   if (!state.hiddenProducts) state.hiddenProducts = {};
   if (!state.editedProducts) state.editedProducts = {};
-  filterProducts(); // populates filteredProducts then calls renderProductList
+
+  // Force populate filteredProducts before rendering
+  filteredProducts = allProducts().filter(p => {
+    if (state.hiddenProducts && state.hiddenProducts[p.id]) return false;
+    return true;
+  });
+
+  renderProductList();
   updateAlertBadge();
   renderCatButtons();
 
-  // Auto-connect hint if Client ID was previously saved
   if (driveClientId && driveSharedFileId) {
     document.getElementById('drive-status').textContent = '☁️ พร้อม — คลิก เชื่อมต่อ Drive';
   } else if (driveClientId) {
