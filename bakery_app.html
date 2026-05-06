@@ -2003,19 +2003,26 @@ function copyFileId() {
 }
 
 // ===== INIT =====
-if (!state.customProducts) state.customProducts = [];
-if (!state.hiddenProducts) state.hiddenProducts = {};
-if (!state.editedProducts) state.editedProducts = {};
-renderProductList();
-renderStats();
-updateAlertBadge();
-renderCatButtons();
+function initApp() {
+  if (!state.customProducts) state.customProducts = [];
+  if (!state.hiddenProducts) state.hiddenProducts = {};
+  if (!state.editedProducts) state.editedProducts = {};
+  filterProducts(); // populates filteredProducts then calls renderProductList
+  updateAlertBadge();
+  renderCatButtons();
 
-// Auto-connect hint if Client ID was previously saved
-if (driveClientId && driveSharedFileId) {
-  document.getElementById('drive-status').textContent = '☁️ พร้อม — คลิก เชื่อมต่อ Drive';
-} else if (driveClientId) {
-  document.getElementById('drive-status').textContent = '☁️ ยังไม่มี File ID — คลิก เชื่อมต่อ Drive';
+  // Auto-connect hint if Client ID was previously saved
+  if (driveClientId && driveSharedFileId) {
+    document.getElementById('drive-status').textContent = '☁️ พร้อม — คลิก เชื่อมต่อ Drive';
+  } else if (driveClientId) {
+    document.getElementById('drive-status').textContent = '☁️ ยังไม่มี File ID — คลิก เชื่อมต่อ Drive';
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
 }
 </script>
 </body>
