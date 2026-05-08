@@ -204,6 +204,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
     <button class="nav-tab" onclick="showPage('stock')" id="stock-tab">📦 Stock</button>
     <button class="nav-tab" onclick="showPage('alerts')" id="alerts-tab">🚨 Alerts <span class="alert-badge" id="alert-count">0</span></button>
     <button class="nav-tab" onclick="showPage('restock')">🛒 Restock Log</button>
+    <button class="nav-tab" onclick="showPage('monthly')">📅 Monthly Report</button>
     <button class="nav-tab" onclick="showPage('recipes')">📝 Recipes</button>
   </div>
   <div style="display:flex;gap:8px;padding-left:12px;border-left:1px solid var(--border);margin-left:4px;">
@@ -279,12 +280,14 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 
 <!-- RESTOCK PAGE -->
 <div class="page" id="page-restock">
-  <h2 style="font-size:20px; font-weight:700; margin-bottom:16px;">🛒 บันทึกการรับของ</h2>
+
+  <!-- SECTION 1: RESTOCK LOG -->
+  <h2 style="font-size:20px;font-weight:700;margin-bottom:16px;">🛒 บันทึกการรับของ</h2>
   <div class="restock-form">
-    <div class="form-grid">
+    <div style="display:grid;grid-template-columns:1fr 100px 140px 140px auto;gap:12px;align-items:end;flex-wrap:wrap;">
       <div class="form-group">
         <label>วัตถุดิบ</label>
-        <input list="ing-list-dl" class="form-input" id="restock-name" placeholder="ชื่อวัตถุดิบ...">
+        <input list="ing-list-dl" class="form-input" id="restock-name" placeholder="ชื่อวัตถุดิบ..." oninput="onRestockNameChange()">
         <datalist id="ing-list-dl"></datalist>
       </div>
       <div class="form-group">
@@ -292,15 +295,121 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
         <input type="number" class="form-input" id="restock-qty" placeholder="0" min="0" step="0.01">
       </div>
       <div class="form-group">
-        <label>ราคาที่ซื้อรวม ก่อน VAT (฿) <span style="color:var(--text3);font-size:10px;">→ อัปเดตราคา/หน่วย อัตโนมัติ</span></label>
-        <input type="number" class="form-input" id="restock-cost" placeholder="0.00" min="0" step="0.01">
+        <label>ราคารวม ก่อน VAT (฿)</label>
+        <input type="number" class="form-input" id="restock-cost-ex" placeholder="0.00" min="0" step="0.01" oninput="calcRestockPrice('ex')">
       </div>
-      <button class="btn btn-green" onclick="addRestock()">+ เพิ่ม</button>
+      <div class="form-group">
+        <label>ราคารวม หลัง VAT (฿)</label>
+        <input type="number" class="form-input" id="restock-cost-inc" placeholder="0.00" min="0" step="0.01" oninput="calcRestockPrice('inc')">
+      </div>
+      <button class="btn btn-green" onclick="addRestock()" style="white-space:nowrap;">+ เพิ่ม</button>
+    </div>
+    <!-- Previous price + unit info row -->
+    <div id="restock-info-row" style="display:none;margin-top:10px;padding:10px 14px;background:var(--surface2);border-radius:8px;font-size:12px;display:flex;gap:20px;flex-wrap:wrap;">
+      <span id="restock-unit-info" style="color:var(--text2);"></span>
+      <span id="restock-prev-price" style="color:var(--text2);"></span>
+      <span id="restock-supplier-info" style="color:var(--text2);"></span>
+      <span id="restock-cpu-preview" style="color:var(--accent);font-weight:700;"></span>
     </div>
   </div>
-  <h3 style="font-size:14px; font-weight:600; margin-bottom:12px; color:var(--text2);">ประวัติการรับของ</h3>
+
+  <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text2);">ประวัติการรับของ</h3>
   <div class="restock-log" id="restock-log">
     <div class="empty-state" style="background:var(--surface);border-radius:12px;padding:30px;">ยังไม่มีประวัติการรับของ</div>
+  </div>
+
+  <!-- SECTION 2: INGREDIENT REPLACEMENT -->
+  <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border);">
+    <h2 style="font-size:20px;font-weight:700;margin-bottom:6px;">🔄 เปลี่ยน/แทนที่วัตถุดิบในสูตร</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">เปลี่ยนวัตถุดิบในสูตรอาหาร — เฉพาะสูตรนั้น หรือทุกสูตรที่ใช้วัตถุดิบนี้</p>
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div class="form-group">
+          <label>วัตถุดิบเดิม (ที่ต้องการเปลี่ยน)</label>
+          <input list="ing-replace-dl" class="form-input" id="replace-old" placeholder="ชื่อวัตถุดิบเดิม..." oninput="onReplaceOldChange()">
+          <datalist id="ing-replace-dl"></datalist>
+          <div id="replace-old-info" style="font-size:11px;color:var(--text2);margin-top:4px;"></div>
+        </div>
+        <div class="form-group">
+          <label>วัตถุดิบใหม่ (ที่จะใช้แทน)</label>
+          <input list="ing-replace-new-dl" class="form-input" id="replace-new" placeholder="ชื่อวัตถุดิบใหม่...">
+          <datalist id="ing-replace-new-dl"></datalist>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px;">ถ้าชื่อใหม่ไม่มีในระบบ จะสร้างให้อัตโนมัติ</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;" id="replace-new-details">
+        <div class="form-group">
+          <label>หน่วย (ถ้าเป็นวัตถุดิบใหม่)</label>
+          <input class="form-input" id="replace-new-unit" placeholder="กรัม / มล. / ชิ้น">
+        </div>
+        <div class="form-group">
+          <label>ราคา/หน่วย (฿)</label>
+          <input type="number" class="form-input" id="replace-new-price" placeholder="0.0000" step="0.0001">
+        </div>
+        <div class="form-group">
+          <label>Brand / Comment</label>
+          <input class="form-input" id="replace-new-brand" placeholder="เช่น Dutch Mill">
+        </div>
+      </div>
+
+      <!-- Recipes that use the old ingredient -->
+      <div id="replace-recipes-list" style="display:none;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text2);">สูตรที่ใช้วัตถุดิบนี้ — เลือกที่ต้องการเปลี่ยน:</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <button class="btn btn-secondary" style="font-size:12px;" onclick="selectAllRecipes(true)">เลือกทั้งหมด</button>
+          <button class="btn btn-secondary" style="font-size:12px;" onclick="selectAllRecipes(false)">ยกเลิกทั้งหมด</button>
+        </div>
+        <div id="replace-recipes-grid" style="display:grid;gap:6px;max-height:240px;overflow-y:auto;"></div>
+      </div>
+
+      <div id="replace-empty-msg" style="display:none;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;color:var(--text2);">
+        ไม่พบสูตรที่ใช้วัตถุดิบนี้
+      </div>
+
+      <div class="modal-btns" style="margin-top:4px;">
+        <button class="btn btn-secondary" onclick="clearReplaceForm()">ล้างข้อมูล</button>
+        <button class="btn btn-primary" id="replace-confirm-btn" onclick="confirmIngredientReplace()" disabled>🔄 เปลี่ยนวัตถุดิบในสูตรที่เลือก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MONTHLY REPORT PAGE -->
+<div class="page" id="page-monthly">
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap;">
+    <h2 style="font-size:20px;font-weight:700;flex:1">📅 Monthly Stock Report</h2>
+    <button class="btn btn-primary no-print" onclick="generateMonthlyReport()">📊 สร้างรายงาน</button>
+    <button class="btn btn-secondary no-print" onclick="window.print()">🖨 พิมพ์</button>
+  </div>
+
+  <div class="restock-form no-print" style="margin-bottom:20px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;">
+      <div class="form-group">
+        <label>วันที่เริ่ม</label>
+        <input type="date" class="form-input" id="monthly-start">
+      </div>
+      <div class="form-group">
+        <label>วันที่สิ้นสุด</label>
+        <input type="date" class="form-input" id="monthly-end">
+      </div>
+      <div class="form-group">
+        <label>แสดงเฉพาะ</label>
+        <select class="form-input" id="monthly-filter">
+          <option value="all">ทั้งหมด</option>
+          <option value="missing">ขาด (Missing)</option>
+          <option value="over">เกิน (Over)</option>
+          <option value="used">ที่ใช้เท่านั้น</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="monthly-report-content">
+    <div class="empty-state" style="background:var(--surface);border-radius:12px;padding:40px;">
+      เลือกช่วงวันที่แล้วกด สร้างรายงาน
+    </div>
   </div>
 </div>
 
@@ -860,6 +969,14 @@ function showPage(id) {
   if (id === 'stock') { renderCatButtons(); renderStock(); }
   if (id === 'alerts') renderAlerts();
   if (id === 'restock') renderRestockLog();
+  if (id === 'monthly') {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    const startEl = document.getElementById('monthly-start');
+    const endEl   = document.getElementById('monthly-end');
+    if (startEl && !startEl.value) startEl.value = new Date(y,m,1).toISOString().split('T')[0];
+    if (endEl && !endEl.value) endEl.value = new Date(y,m+1,0).toISOString().split('T')[0];
+  }
   if (id === 'recipes') renderRecipeList();
   updateAlertBadge();
 }
@@ -1102,10 +1219,17 @@ function confirmProduction() {
   );
   if (!confirmed) return;
 
-  // Deduct stock
+  // Deduct stock + save production log
   Object.entries(ingTotals).forEach(([name, data]) => {
     if (!state.stock[name]) state.stock[name] = { qty: 0, min: 500, unit: data.unit };
     state.stock[name].qty = Math.max(0, (state.stock[name].qty || 0) - data.amount);
+  });
+
+  if (!state.productionLog) state.productionLog = [];
+  state.productionLog.push({
+    dateISO: new Date().toISOString(),
+    products: active.map(p => ({ name: p.name, batches: state.quantities[p.id], pieces: state.quantities[p.id]*p.pieces })),
+    ingredients: Object.fromEntries(Object.entries(ingTotals).map(([k,v]) => [k, v.amount]))
   });
 
   saveState();
@@ -1248,54 +1372,257 @@ function updateAlertBadge() {
 
 // ===== RESTOCK PAGE =====
 function renderRestockLog() {
-  // Populate datalist
+  const allNames = [...new Set([...Object.keys(RAW_MAT_BASE), ...Object.keys(RAW_MAT_FULL), ...Object.keys(state.stock)])].sort();
   const dl = document.getElementById('ing-list-dl');
-  dl.innerHTML = Object.keys(state.stock).map(n => `<option value="${n}">`).join('');
+  if (dl) dl.innerHTML = allNames.map(n => `<option value="${n}">`).join('');
+  const dl2 = document.getElementById('ing-replace-dl');
+  if (dl2) dl2.innerHTML = allNames.map(n => `<option value="${n}">`).join('');
+  const dl3 = document.getElementById('ing-replace-new-dl');
+  if (dl3) dl3.innerHTML = allNames.map(n => `<option value="${n}">`).join('');
 
-  const log = [...state.restockLog].reverse();
+  const log = [...(state.restockLog||[])].reverse();
   if (!log.length) {
     document.getElementById('restock-log').innerHTML = '<div class="empty-state" style="background:var(--surface);border-radius:12px;padding:30px;">ยังไม่มีประวัติการรับของ</div>';
     return;
   }
-  document.getElementById('restock-log').innerHTML = log.map((item, i) => `
+  document.getElementById('restock-log').innerHTML = log.map(item => `
     <div class="log-item">
       <div class="log-date">${item.date}</div>
       <div class="log-name">${item.name}</div>
       <div class="log-qty">+${formatNum(item.qty)} ${item.unit || ''}</div>
-      ${item.cost ? `<div class="log-cost">฿${item.cost.toFixed(2)} รวม${item.priceNote || ''}</div>` : ''}
+      ${item.costEx ? `<div class="log-cost">ก่อน VAT: ฿${item.costEx.toFixed(2)} | หลัง VAT: ฿${(item.costInc||item.costEx*1.07).toFixed(2)}${item.priceNote||''}</div>` :
+        item.cost ? `<div class="log-cost">฿${item.cost.toFixed(2)}${item.priceNote||''}</div>` : ''}
     </div>`).join('');
 }
 
-function addRestock() {
+function onRestockNameChange() {
   const name = document.getElementById('restock-name').value.trim();
-  const qty = parseFloat(document.getElementById('restock-qty').value);
-  const totalCost = parseFloat(document.getElementById('restock-cost').value) || 0;
+  const infoRow = document.getElementById('restock-info-row');
+  if (!name) { infoRow.style.display = 'none'; return; }
+  const stock   = state.stock[name] || {};
+  const full    = RAW_MAT_FULL[name] || {};
+  const base    = RAW_MAT_BASE[name] || {};
+  const unit    = stock.unit || full.unit || base.unit || '';
+  const prevCpu = getCurrentPrice(name);
+  const supplier= stock.supplier || full.supplier || '';
+  document.getElementById('restock-unit-info').textContent  = unit ? `หน่วย: ${unit}` : '';
+  document.getElementById('restock-prev-price').textContent = prevCpu ? `ราคาเดิม: ฿${prevCpu.toFixed(4)}/หน่วย` : 'ยังไม่มีราคา';
+  document.getElementById('restock-supplier-info').textContent = supplier ? `Supplier: ${supplier}` : '';
+  document.getElementById('restock-cpu-preview').textContent = '';
+  infoRow.style.display = 'flex';
+}
+
+function calcRestockPrice(source) {
+  const qty  = parseFloat(document.getElementById('restock-qty').value) || 0;
+  const exEl = document.getElementById('restock-cost-ex');
+  const incEl= document.getElementById('restock-cost-inc');
+  const VAT  = 1.07;
+  if (source === 'ex') {
+    const ex = parseFloat(exEl.value) || 0;
+    if (ex > 0) incEl.value = (ex * VAT).toFixed(2);
+  } else {
+    const inc = parseFloat(incEl.value) || 0;
+    if (inc > 0) exEl.value = (inc / VAT).toFixed(2);
+  }
+  const ex = parseFloat(exEl.value) || 0;
+  const cpuEl = document.getElementById('restock-cpu-preview');
+  if (cpuEl && ex > 0 && qty > 0) cpuEl.textContent = `→ ราคา/หน่วย: ฿${(ex/qty).toFixed(4)}`;
+}
+
+function addRestock() {
+  const name    = document.getElementById('restock-name').value.trim();
+  const qty     = parseFloat(document.getElementById('restock-qty').value);
+  const costEx  = parseFloat(document.getElementById('restock-cost-ex').value) || 0;
+  const costInc = parseFloat(document.getElementById('restock-cost-inc').value) || 0;
   if (!name || !qty || qty <= 0) { alert('กรุณากรอกชื่อวัตถุดิบและจำนวน'); return; }
 
-  if (!state.stock[name]) state.stock[name] = { qty: 0, min: 500, unit: RAW_MAT_BASE[name]?.unit || '' };
+  if (!state.stock[name]) state.stock[name] = {
+    qty: 0, min: 500,
+    unit: RAW_MAT_BASE[name]?.unit || RAW_MAT_FULL[name]?.unit || ''
+  };
   state.stock[name].qty = (state.stock[name].qty || 0) + qty;
-
-  // If a purchase cost was entered, update the cost_per_unit for this ingredient
-  if (totalCost > 0) {
-    const newPricePerUnit = totalCost / qty;
-    state.stock[name].cost_per_unit = parseFloat(newPricePerUnit.toFixed(6));
+  if (costEx > 0) {
+    state.stock[name].cost_per_unit = parseFloat((costEx / qty).toFixed(6));
+    state.stock[name].cost = costEx;
+    state.stock[name].cost_inc_tax = costInc || costEx * 1.07;
   }
 
   const now = new Date();
-  const priceNote = totalCost > 0 ? ` (฿${(totalCost/qty).toFixed(4)}/หน่วย ก่อน VAT)` : '';
+  const priceNote = costEx > 0 ? ` (฿${(costEx/qty).toFixed(4)}/หน่วย)` : '';
   state.restockLog.push({
     date: now.toLocaleDateString('th-TH') + ' ' + now.toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit'}),
-    name, qty, cost: totalCost,
-    unit: state.stock[name].unit || '',
-    priceNote
+    dateISO: now.toISOString(),
+    name, qty, costEx, costInc: costInc || (costEx > 0 ? costEx*1.07 : 0),
+    cost: costEx,
+    unit: state.stock[name].unit || '', priceNote
   });
 
-  document.getElementById('restock-name').value = '';
-  document.getElementById('restock-qty').value = '';
-  document.getElementById('restock-cost').value = '';
-  saveState();
-  updateAlertBadge();
-  renderRestockLog();
+  ['restock-name','restock-qty','restock-cost-ex','restock-cost-inc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('restock-info-row').style.display = 'none';
+  saveState(); updateAlertBadge(); renderRestockLog();
+}
+
+// ===== INGREDIENT REPLACEMENT =====
+function onReplaceOldChange() {
+  const name  = document.getElementById('replace-old').value.trim();
+  const infoEl  = document.getElementById('replace-old-info');
+  const listEl  = document.getElementById('replace-recipes-list');
+  const emptyEl = document.getElementById('replace-empty-msg');
+  const btn     = document.getElementById('replace-confirm-btn');
+  if (!name) { infoEl.textContent=''; listEl.style.display='none'; emptyEl.style.display='none'; btn.disabled=true; return; }
+  const cpu = getCurrentPrice(name);
+  const unit= state.stock[name]?.unit || RAW_MAT_FULL[name]?.unit || '';
+  infoEl.textContent = `หน่วย: ${unit||'—'} | ราคา: ฿${cpu.toFixed(4)}/หน่วย`;
+  const recipes = allProducts().filter(p => !state.hiddenProducts?.[p.id] && (p.ingredients||[]).some(i => i.name === name));
+  if (!recipes.length) { listEl.style.display='none'; emptyEl.style.display='block'; btn.disabled=true; return; }
+  emptyEl.style.display='none'; listEl.style.display='block';
+  document.getElementById('replace-recipes-grid').innerHTML = recipes.map(p => {
+    const ing = p.ingredients.find(i => i.name === name);
+    const badge = p.sheet==='MilkBar'?'milkbar':p.sheet==='Snack'?'snack':'bakehouse';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;cursor:pointer;">
+      <input type="checkbox" class="replace-recipe-cb" data-id="${p.id}" checked style="width:16px;height:16px;">
+      <span class="prod-badge badge-${badge}">${p.sheet}</span>
+      <span style="flex:1;font-size:13px;">${p.name}</span>
+      <span style="font-size:11px;color:var(--text2);">${formatNum(ing.amount)} ${ing.unit}</span>
+    </label>`;
+  }).join('');
+  btn.disabled = false;
+}
+
+function selectAllRecipes(val) {
+  document.querySelectorAll('.replace-recipe-cb').forEach(cb => cb.checked = val);
+}
+
+function clearReplaceForm() {
+  ['replace-old','replace-new','replace-new-unit','replace-new-price','replace-new-brand'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('replace-old-info').textContent='';
+  document.getElementById('replace-recipes-list').style.display='none';
+  document.getElementById('replace-empty-msg').style.display='none';
+  document.getElementById('replace-confirm-btn').disabled=true;
+}
+
+function confirmIngredientReplace() {
+  const oldName  = document.getElementById('replace-old').value.trim();
+  const newName  = document.getElementById('replace-new').value.trim();
+  const newUnit  = document.getElementById('replace-new-unit').value.trim();
+  const newPrice = parseFloat(document.getElementById('replace-new-price').value) || 0;
+  const newBrand = document.getElementById('replace-new-brand').value.trim();
+  if (!oldName||!newName) { alert('กรุณากรอกวัตถุดิบเดิมและใหม่'); return; }
+  if (oldName===newName)  { alert('ชื่อต้องไม่ซ้ำกัน'); return; }
+  const selectedIds = [...document.querySelectorAll('.replace-recipe-cb:checked')].map(cb => parseInt(cb.dataset.id));
+  if (!selectedIds.length) { alert('กรุณาเลือกอย่างน้อย 1 สูตร'); return; }
+  if (!state.stock[newName]) {
+    state.stock[newName] = { qty:0, min:state.stock[oldName]?.min||500,
+      unit: newUnit||state.stock[oldName]?.unit||'',
+      cost_per_unit: newPrice||getCurrentPrice(oldName), brand: newBrand };
+  } else {
+    if (newUnit)  state.stock[newName].unit = newUnit;
+    if (newPrice) state.stock[newName].cost_per_unit = newPrice;
+    if (newBrand) state.stock[newName].brand = newBrand;
+  }
+  let updatedCount = 0;
+  selectedIds.forEach(id => {
+    const isCustom = id >= 10000;
+    const prod = allProducts().find(p => p.id === id);
+    if (!prod) return;
+    const updatedIngs = (prod.ingredients||[]).map(ing =>
+      ing.name === oldName ? {...ing, name:newName, unit:newUnit||ing.unit, amount_per_piece: ing.amount/(prod.pieces||1)} : ing
+    );
+    if (isCustom) { const idx=state.customProducts.findIndex(p=>p.id===id); if(idx>=0) state.customProducts[idx].ingredients=updatedIngs; }
+    else { if(!state.editedProducts[id]) state.editedProducts[id]={...prod}; state.editedProducts[id].ingredients=updatedIngs; }
+    updatedCount++;
+  });
+  saveState(); clearReplaceForm(); filterProducts();
+  alert(`✅ เปลี่ยนวัตถุดิบเรียบร้อย!\n\nเปลี่ยน "${oldName}" → "${newName}"\nใน ${updatedCount} สูตร`);
+}
+
+// ===== MONTHLY STOCK REPORT =====
+function generateMonthlyReport() {
+  const startStr = document.getElementById('monthly-start').value;
+  const endStr   = document.getElementById('monthly-end').value;
+  const filter   = document.getElementById('monthly-filter').value;
+  if (!startStr||!endStr) { alert('กรุณาเลือกช่วงวันที่'); return; }
+  const startDate = new Date(startStr+'T00:00:00');
+  const endDate   = new Date(endStr+'T23:59:59');
+  if (startDate > endDate) { alert('วันที่เริ่มต้องน้อยกว่าวันสิ้นสุด'); return; }
+
+  const usedMap = {};
+  (state.productionLog||[]).forEach(log => {
+    const d = new Date(log.dateISO);
+    if (d<startDate||d>endDate) return;
+    Object.entries(log.ingredients||{}).forEach(([name,amt]) => { usedMap[name]=(usedMap[name]||0)+amt; });
+  });
+
+  const restockedMap = {};
+  (state.restockLog||[]).forEach(log => {
+    const d = new Date(log.dateISO||0);
+    if (d<startDate||d>endDate) return;
+    restockedMap[log.name] = (restockedMap[log.name]||0)+(log.qty||0);
+  });
+
+  const allNames = new Set([...Object.keys(usedMap),...Object.keys(restockedMap)]);
+  let rows = [];
+  allNames.forEach(name => {
+    const used=usedMap[name]||0, restocked=restockedMap[name]||0;
+    const actualStock=state.stock[name]?.qty||0;
+    const unit=state.stock[name]?.unit||RAW_MAT_FULL[name]?.unit||'';
+    const cat=INGREDIENT_CATEGORIES[name]||'—';
+    rows.push({name,used,restocked,actualStock,unit,cat});
+  });
+
+  rows = rows.filter(r=>r.used>0||r.restocked>0);
+  if (filter==='missing') rows=rows.filter(r=>r.restocked<r.used);
+  if (filter==='over')    rows=rows.filter(r=>r.restocked>r.used);
+  if (filter==='used')    rows=rows.filter(r=>r.used>0);
+  rows.sort((a,b)=>a.cat.localeCompare(b.cat)||a.name.localeCompare(b.name,'th'));
+
+  if (!rows.length) {
+    document.getElementById('monthly-report-content').innerHTML='<div class="empty-state" style="background:var(--surface);border-radius:12px;padding:40px;">ไม่พบข้อมูลในช่วงวันที่นี้<br><span style="font-size:12px;color:var(--text3);">ต้องกด ✅ ยืนยันการผลิต และมีประวัติการรับของในช่วงนี้</span></div>';
+    return;
+  }
+
+  const dateLabel=`${startDate.toLocaleDateString('th-TH')} — ${endDate.toLocaleDateString('th-TH')}`;
+  const totalMissing=rows.filter(r=>r.restocked<r.used&&r.used>0).length;
+  const totalOver=rows.filter(r=>r.restocked>r.used).length;
+
+  const html = `<div style="margin-bottom:16px;">
+    <div style="font-size:16px;font-weight:700;margin-bottom:12px;">📅 ${dateLabel}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+      <div class="card"><div class="card-title">วัตถุดิบทั้งหมด</div><div class="card-value">${rows.length}</div></div>
+      <div class="card"><div class="card-title" style="color:var(--danger)">ขาด</div><div class="card-value" style="color:var(--danger)">${totalMissing}</div></div>
+      <div class="card"><div class="card-title" style="color:var(--green)">เกิน</div><div class="card-value" style="color:var(--green)">${totalOver}</div></div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+      <div style="background:#2c3e50;color:white;padding:10px 16px;font-size:13px;font-weight:700;">รายละเอียดวัตถุดิบ</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:var(--surface2);color:var(--text2);">
+          <th style="padding:9px 14px;text-align:left;">วัตถุดิบ</th>
+          <th style="padding:9px 14px;text-align:center;">หมวด</th>
+          <th style="padding:9px 14px;text-align:right;">ใช้ในการผลิต</th>
+          <th style="padding:9px 14px;text-align:right;">รับเข้า</th>
+          <th style="padding:9px 14px;text-align:right;">สต็อคปัจจุบัน</th>
+          <th style="padding:9px 14px;text-align:center;">หน่วย</th>
+          <th style="padding:9px 14px;text-align:center;">สถานะ</th>
+        </tr></thead>
+        <tbody>${rows.map((r,i)=>{
+          const miss=r.restocked<r.used&&r.used>0, over=r.restocked>r.used;
+          const sc=miss?'var(--danger)':over?'var(--green)':\'var(--text2)\';
+          const st=miss?'⚠ ขาด':over?'✓ เกิน':'= พอดี';
+          return `<tr style="${i%2===1?'background:var(--surface2);':''}">
+            <td style="padding:8px 14px;font-weight:500;">${r.name}</td>
+            <td style="padding:8px 14px;text-align:center;font-size:11px;color:var(--text2);">${r.cat}</td>
+            <td style="padding:8px 14px;text-align:right;color:var(--danger);">${r.used>0?formatNum(r.used):'—'}</td>
+            <td style="padding:8px 14px;text-align:right;color:var(--green);">${r.restocked>0?formatNum(r.restocked):'—'}</td>
+            <td style="padding:8px 14px;text-align:right;font-weight:700;">${formatNum(r.actualStock)}</td>
+            <td style="padding:8px 14px;text-align:center;color:var(--text2);">${r.unit}</td>
+            <td style="padding:8px 14px;text-align:center;font-weight:700;color:${sc};">${st}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+  document.getElementById('monthly-report-content').innerHTML = html;
 }
 
 // ===== MODAL =====
