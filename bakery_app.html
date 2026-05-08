@@ -908,7 +908,7 @@ function renderProductList() {
         <button class="qty-btn" onclick="changeQty(${p.id},-1)">−</button>
         <input class="qty-input" type="number" min="0" value="${qty}" onchange="setQty(${p.id},this.value)" id="qty-${p.id}">
         <button class="qty-btn" onclick="changeQty(${p.id},1)">+</button>
-        <div id="total-${p.id}" style="min-width:52px;font-size:12px;color:var(--accent);font-weight:700;text-align:center;">${qty > 0 ? qty*p.pieces+'<br><span style=\\'font-size:10px;color:var(--text2);font-weight:400;\\'>ชิ้น</span>' : ''}</div>
+        <div id="total-${p.id}" style="min-width:52px;font-size:12px;color:var(--accent);font-weight:700;text-align:center;">${qty > 0 ? (qty*p.pieces) + ' ชิ้น' : ''}</div>
       </div>
     </div>`;
   }).join('');
@@ -932,7 +932,7 @@ function changeQty(id, delta) {
   if (input) input.value = newVal;
   const p = allProducts().find(p => p.id === id);
   const totalEl = document.getElementById('total-' + id);
-  if (totalEl && p) totalEl.innerHTML = newVal > 0 ? newVal*p.pieces+'<br><span style="font-size:10px;color:var(--text2);font-weight:400;">ชิ้น</span>' : '';
+  if (totalEl && p) totalEl.textContent = newVal > 0 ? (newVal*p.pieces) + ' ชิ้น' : '';
   saveState();
   const item = input?.closest('.prod-item');
   if (item) item.classList.toggle('prod-item-active', newVal > 0);
@@ -944,7 +944,7 @@ function setQty(id, val) {
   const newVal = state.quantities[id];
   const p = allProducts().find(p => p.id === id);
   const totalEl = document.getElementById('total-' + id);
-  if (totalEl && p) totalEl.innerHTML = newVal > 0 ? newVal*p.pieces+'<br><span style="font-size:10px;color:var(--text2);font-weight:400;">ชิ้น</span>' : '';
+  if (totalEl && p) totalEl.textContent = newVal > 0 ? (newVal*p.pieces) + ' ชิ้น' : '';
   saveState();
   const input = document.getElementById('qty-' + id);
   if (input) input.closest('.prod-item')?.classList.toggle('prod-item-active', newVal > 0);
