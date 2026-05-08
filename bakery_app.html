@@ -292,7 +292,20 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
       </div>
       <div class="form-group">
         <label>จำนวน</label>
-        <input type="number" class="form-input" id="restock-qty" placeholder="0" min="0" step="0.01">
+        <div style="display:flex;gap:6px;">
+          <input type="number" class="form-input" id="restock-qty" placeholder="0" min="0" step="0.01" style="flex:1;">
+          <select class="form-input" id="restock-unit-sel" style="width:90px;">
+            <option value="">หน่วย</option>
+            <option value="กรัม">กรัม</option>
+            <option value="กก.">กก.</option>
+            <option value="ถุง">ถุง</option>
+            <option value="ขวด">ขวด</option>
+            <option value="กล่อง">กล่อง</option>
+            <option value="ชิ้น">ชิ้น</option>
+            <option value="มล.">มล.</option>
+            <option value="ลิตร">ลิตร</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
         <label>ราคารวม ก่อน VAT (฿)</label>
@@ -616,6 +629,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
       <div class="form-group">
         <label>จำนวนต่อแพค</label>
         <input type="number" class="form-input" id="m-total-unit" min="0" step="0.01">
+      </div>
+
+      <div class="form-group">
+        <label>ขนาดบรรจุ <span style="color:var(--text3);font-size:10px;">(เช่น 1kg bag, 500ml bottle)</span></label>
+        <input class="form-input" id="m-pack-size" placeholder="เช่น 1kg bag, 25kg sack">
       </div>
 
       <div class="form-group">
@@ -1312,7 +1330,7 @@ function renderStock() {
       <div style="flex:1;min-width:0;">
         <div class="stock-item-name">${name}${brand ? ' <span style="color:var(--text2);font-weight:400;">'+brand+'</span>' : ''}</div>
         <div class="stock-item-unit">${data.unit || ''}${supplier ? ' · ' + supplier : ''}${cat ? ' <span style="background:var(--surface2);border-radius:4px;padding:1px 6px;font-size:10px;color:var(--text2);">'+cat+'</span>' : ''}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px;">฿${cpu.toFixed(4)}/หน่วย · Min: ${formatNum(data.min||500)}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;">฿${cpu.toFixed(4)}/หน่วย · Min: ${formatNum(data.min||500)}${data.pack_size ? ' · <span style=\"color:var(--blue);\">' + data.pack_size + '</span>' : ''}</div>
       </div>
       <div class="stock-item-qty ${isLow ? 'low' : 'ok'}">
         ${formatNum(data.qty || 0)} <span style="font-size:11px;font-weight:400;color:var(--text2)">${data.unit || ''}</span>
@@ -1409,6 +1427,13 @@ function onRestockNameChange() {
   document.getElementById('restock-prev-price').textContent = prevCpu ? `ราคาเดิม: ฿${prevCpu.toFixed(4)}/หน่วย` : 'ยังไม่มีราคา';
   document.getElementById('restock-supplier-info').textContent = supplier ? `Supplier: ${supplier}` : '';
   document.getElementById('restock-cpu-preview').textContent = '';
+  // Auto-select unit from stock if not already selected
+  const unitSel = document.getElementById('restock-unit-sel');
+  if (unitSel && !unitSel.value) {
+    const autoUnit = state.stock[name]?.unit || RAW_MAT_FULL[name]?.unit || RAW_MAT_BASE[name]?.unit || '';
+    const opts = [...unitSel.options].map(o => o.value);
+    if (autoUnit && opts.includes(autoUnit)) unitSel.value = autoUnit;
+  }
   infoRow.style.display = 'flex';
 }
 
@@ -1438,7 +1463,7 @@ function addRestock() {
 
   if (!state.stock[name]) state.stock[name] = {
     qty: 0, min: 500,
-    unit: RAW_MAT_BASE[name]?.unit || RAW_MAT_FULL[name]?.unit || ''
+    unit: document.getElementById('restock-unit-sel')?.value || RAW_MAT_BASE[name]?.unit || RAW_MAT_FULL[name]?.unit || ''
   };
   state.stock[name].qty = (state.stock[name].qty || 0) + qty;
   if (costEx > 0) {
@@ -1454,10 +1479,11 @@ function addRestock() {
     dateISO: now.toISOString(),
     name, qty, costEx, costInc: costInc || (costEx > 0 ? costEx*1.07 : 0),
     cost: costEx,
-    unit: state.stock[name].unit || '', priceNote
+    unit: document.getElementById('restock-unit-sel')?.value || state.stock[name].unit || '', priceNote
   });
 
   ['restock-name','restock-qty','restock-cost-ex','restock-cost-inc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('restock-unit-sel').value = '';
   document.getElementById('restock-info-row').style.display = 'none';
   saveState(); updateAlertBadge(); renderRestockLog();
 }
@@ -1643,6 +1669,7 @@ function openModal(name) {
   document.getElementById('m-supplier').value  = stock.supplier ?? full.supplier ?? '';
   document.getElementById('m-unit').value      = stock.unit     || full.unit     || base.unit || '';
   document.getElementById('m-total-unit').value= stock.total_unit ?? full.total_unit ?? '';
+  document.getElementById('m-pack-size').value = stock.pack_size || full.remarks || '';
   document.getElementById('m-cost').value      = stock.cost     ?? full.cost     ?? '';
   document.getElementById('m-cost-tax').value  = stock.cost_inc_tax ?? full.cost_inc_tax ?? '';
   document.getElementById('m-cpu').value       = getCurrentPrice(name) || '';
@@ -1687,6 +1714,7 @@ function saveStock() {
     cost:         cost       || undefined,
     cost_inc_tax: cost_tax   || undefined,
     cost_per_unit: cpu       || undefined,
+    pack_size:     document.getElementById('m-pack-size').value.trim() || undefined,
     remarks:      document.getElementById('m-remarks').value.trim()  || undefined,
   });
 
@@ -1729,7 +1757,7 @@ function exportStockExcel() {
 
   const hdr = (v) => ({ v, t:'s', s:{ font:wf(1,null,'FFFFFF'), fill:{ fgColor:{rgb:'2C3E50'} },
     alignment:{ horizontal:'center', wrapText:true }, border:bdr } });
-  rows.push([ hdr('ชื่อวัตถุดิบ'), hdr('หมวดหมู่'), hdr('สต็อคปัจจุบัน'), hdr('ขั้นต่ำก่อนแจ้งเตือน'), hdr('หน่วย'), hdr('ราคา/หน่วย (฿)'), hdr('สถานะ') ]);
+  rows.push([ hdr('ชื่อวัตถุดิบ'), hdr('หมวดหมู่'), hdr('ขนาดบรรจุ'), hdr('สต็อคปัจจุบัน'), hdr('ขั้นต่ำก่อนแจ้งเตือน'), hdr('หน่วย'), hdr('ราคา/หน่วย (฿)'), hdr('สถานะ') ]);
 
   const entries = Object.entries(state.stock).sort((a,b) => {
     const ca = INGREDIENT_CATEGORIES[a[0]] || 'zzz';
@@ -1750,6 +1778,7 @@ function exportStockExcel() {
     rows.push([
       c(name, isLow ? wf(1,null,'C0392B') : wf(0), rf),
       c(cat, wf(0,null,'5D6D7E'), rf),
+      c(data.pack_size || RAW_MAT_FULL[name]?.remarks || '', wf(0,null,'1A5276'), rf),
       c(data.qty||0, wf(1,null, isLow?'C0392B':'1A5276'), rf, '#,##0.00', 'right'),
       c(data.min||500, null, rf, '#,##0.00', 'right'),
       c(data.unit||'', null, rf, null, 'center'),
@@ -1760,7 +1789,7 @@ function exportStockExcel() {
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:6} }];
-  ws['!cols'] = [{wch:36},{wch:22},{wch:18},{wch:22},{wch:12},{wch:18},{wch:12}];
+  ws['!cols'] = [{wch:36},{wch:22},{wch:20},{wch:18},{wch:22},{wch:12},{wch:18},{wch:12}];
   XLSX.utils.book_append_sheet(wb, ws, 'Stock');
 
   const d = new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
