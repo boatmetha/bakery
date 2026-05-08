@@ -4,8 +4,21 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🍞 Bakery Stock & Production System</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" onerror="this.remove()">
+<script>
+// Load SheetJS — tries CDN first, falls back to local file for offline use
+(function() {
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onerror = function() {
+    // CDN failed — try local file
+    var s2 = document.createElement('script');
+    s2.src = 'xlsx.full.min.js';
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
+})();
+</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root {
@@ -23,7 +36,7 @@
   --text3: #4a5568;
   --warn: #f39c12;
   --danger: #e74c3c;
-  --font: 'Space Grotesk', 'Noto Sans Thai', sans-serif;
+  --font: 'Space Grotesk', 'Noto Sans Thai', 'Sarabun', 'Prompt', system-ui, -apple-system, sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -895,6 +908,7 @@ function renderProductList() {
         <button class="qty-btn" onclick="changeQty(${p.id},-1)">−</button>
         <input class="qty-input" type="number" min="0" value="${qty}" onchange="setQty(${p.id},this.value)" id="qty-${p.id}">
         <button class="qty-btn" onclick="changeQty(${p.id},1)">+</button>
+        <div id="total-${p.id}" style="min-width:52px;font-size:12px;color:var(--accent);font-weight:700;text-align:center;">${qty > 0 ? qty*p.pieces+'<br><span style=\\'font-size:10px;color:var(--text2);font-weight:400;\\'>ชิ้น</span>' : ''}</div>
       </div>
     </div>`;
   }).join('');
@@ -916,6 +930,9 @@ function changeQty(id, delta) {
   state.quantities[id] = newVal;
   const input = document.getElementById('qty-' + id);
   if (input) input.value = newVal;
+  const p = allProducts().find(p => p.id === id);
+  const totalEl = document.getElementById('total-' + id);
+  if (totalEl && p) totalEl.innerHTML = newVal > 0 ? newVal*p.pieces+'<br><span style="font-size:10px;color:var(--text2);font-weight:400;">ชิ้น</span>' : '';
   saveState();
   const item = input?.closest('.prod-item');
   if (item) item.classList.toggle('prod-item-active', newVal > 0);
@@ -924,9 +941,13 @@ function changeQty(id, delta) {
 
 function setQty(id, val) {
   state.quantities[id] = Math.max(0, parseFloat(val) || 0);
+  const newVal = state.quantities[id];
+  const p = allProducts().find(p => p.id === id);
+  const totalEl = document.getElementById('total-' + id);
+  if (totalEl && p) totalEl.innerHTML = newVal > 0 ? newVal*p.pieces+'<br><span style="font-size:10px;color:var(--text2);font-weight:400;">ชิ้น</span>' : '';
   saveState();
   const input = document.getElementById('qty-' + id);
-  if (input) input.closest('.prod-item')?.classList.toggle('prod-item-active', state.quantities[id] > 0);
+  if (input) input.closest('.prod-item')?.classList.toggle('prod-item-active', newVal > 0);
   updatePlannerHeader();
 }
 
@@ -949,8 +970,9 @@ function generateReport() {
   active.forEach(p => {
     const qty = state.quantities[p.id];
     p.ingredients.forEach(ing => {
-      if (!ing.amount_per_piece || ing.amount_per_piece <= 0) return;
-      const needed = ing.amount_per_piece * qty;
+      if (!ing.amount && ing.amount !== 0) return;
+      // Use full batch amount × number of batches
+      const needed = ing.amount * qty;
       if (!ingTotals[ing.name]) ingTotals[ing.name] = { amount: 0, unit: ing.unit };
       ingTotals[ing.name].amount += needed;
     });
@@ -1063,9 +1085,9 @@ function confirmProduction() {
   active.forEach(p => {
     const qty = state.quantities[p.id];
     p.ingredients.forEach(ing => {
-      if (!ing.amount_per_piece || ing.amount_per_piece <= 0) return;
+      if (!ing.amount && ing.amount !== 0) return;
       if (!ingTotals[ing.name]) ingTotals[ing.name] = { amount: 0, unit: ing.unit };
-      ingTotals[ing.name].amount += ing.amount_per_piece * qty;
+      ingTotals[ing.name].amount += ing.amount * qty;
     });
   });
 
